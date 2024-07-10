@@ -11,31 +11,31 @@ namespace SignalRGB.AzureFunction
     {
         private readonly ILogger<SteamIntegrationFunction> _logger;
         private readonly IAppConfiguration _appConfiguration;
-        private readonly IServiceBusSenderService _serviceBusSenderService;
         private readonly ISteamHelperService _steamHelperService;
 
-        public SteamIntegrationFunction(ILogger<SteamIntegrationFunction> logger, IAppConfiguration appConfiguration, IServiceBusSenderService serviceBusSenderService, ISteamHelperService steamHelperService)
+        public SteamIntegrationFunction(ILogger<SteamIntegrationFunction> logger, IAppConfiguration appConfiguration, ISteamHelperService steamHelperService)
         {
             _logger = logger;
             _appConfiguration = appConfiguration;
-            _serviceBusSenderService = serviceBusSenderService;
             _steamHelperService = steamHelperService;
         }
 
         // Timer trigger function that runs every 15 seconds
         [Function("SteamIntegration")]
-        public async Task Run([TimerTrigger("*/15 * * * * *")] TimerInfo myTimer)
+        [ServiceBusOutput("%ServiceBusQueue%", Connection = "ServiceBusConnection")]
+        public async Task<string?> Run([TimerTrigger("*/15 * * * * *")] TimerInfo myTimer)
         {
             _logger.LogInformation($"Checking Steam status: {DateTime.Now}");
 
+            var queueMessage = _appConfiguration.GameModeMessage;
             var status = await _steamHelperService.GetSteamStatus();
 
             _logger.LogInformation($"Steam status: {status}");
 
-            if (status == OnlineStatus.Online)
-            {
-                await _serviceBusSenderService.SendMessageAsync(_appConfiguration.GameModeMessage);
-            }
+            //Send message using Service Bus binding
+            if (status == OnlineStatus.Online) return queueMessage;
+
+            return null;
         }
     }
 }
